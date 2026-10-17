@@ -216,6 +216,7 @@ export default function App() {
         <div className="brand">
           <h1>Library API</h1>
           <p>Phase 1 examples</p>
+          <a className="catalog-link" href="/test-book">50 books</a>
         </div>
         <div className="server-switch" role="group" aria-label="Server">
           {(Object.keys(servers) as ServerId[]).map((id) => (

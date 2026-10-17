@@ -1,0 +1,681 @@
+openapi: 3.1.0
+info:
+  title: Library API
+  version: 1.0.0
+  description: |
+    Design-first description of the Phase 1 Library API, plus the reviews
+    exercise. FastAPI on port 8000 and Express on port 8001 both follow
+    CONTRACT.md. Every route is public. Reviews are specified here and
+    implemented in server/fastapi/api/reviews.py, and they are not mounted,
+    so a call to them is 404 until that router is wired in.
+servers:
+  - url: http://127.0.0.1:8000
+    description: FastAPI
+  - url: http://127.0.0.1:8001
+    description: Express
+tags:
+  - name: books
+    description: The book collection and one book.
+  - name: authors
+    description: The author catalog. A book's author is the person's name.
+  - name: feed
+    description: Cursor pages of books, always in id order.
+  - name: books-v2
+    description: The same books, with links.self added. v1 does not grow that field.
+  - name: reviews
+    description: Reviews for one book. Documented for the exercise. Not mounted on the running servers.
+security: []
+paths:
+  /v1/books:
+    get:
+      operationId: listBooks
+      tags: [books]
+      summary: List books
+      description: |
+        Use one paging style. limit and offset, or page and per_page.
+        Sending both styles is 422. An unknown query parameter is 422.
+        A filter that matches nothing is 200 with an empty data array.
+      parameters:
+        - $ref: "#/components/parameters/Author"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: One page of books.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookPage"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    post:
+      operationId: createBook
+      tags: [books]
+      summary: Create a book
+      description: |
+        The server assigns id. Sending the same title twice is allowed.
+        The next id after the seed is 51 until the process restarts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookIn"
+            examples:
+              dune:
+                value:
+                  title: Dune
+                  author: Frank Herbert
+                  year: 1965
+      responses:
+        "201":
+          description: The book was created.
+          headers:
+            Location:
+              description: Path of the new book, for example /v1/books/51.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/books/{bookId}:
+    parameters:
+      - $ref: "#/components/parameters/BookId"
+    get:
+      operationId: getBook
+      tags: [books]
+      summary: Read one book
+      responses:
+        "200":
+          description: The book.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    put:
+      operationId: replaceBook
+      tags: [books]
+      summary: Replace a book
+      description: Send title, author, and year. A missing field is 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookIn"
+      responses:
+        "200":
+          description: The replaced book.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    patch:
+      operationId: updateBook
+      tags: [books]
+      summary: Change some fields
+      description: Send only the fields that change. An empty object is valid and changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookPatch"
+            examples:
+              year:
+                value:
+                  year: 1966
+      responses:
+        "200":
+          description: The book after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteBook
+      tags: [books]
+      summary: Delete a book
+      description: 204 the first time. 404 if you delete it again. The book stays gone.
+      responses:
+        "204":
+          description: The book was deleted. The body is empty.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    post:
+      operationId: postBookItem
+      tags: [books]
+      summary: Reject create-on-an-item
+      description: Create stays POST /v1/books. This path answers 405 and lists the real methods.
+      responses:
+        "405":
+          description: POST is not allowed on one book.
+          headers:
+            Allow:
+              description: GET, PUT, PATCH, DELETE
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/authors:
+    get:
+      operationId: listAuthors
+      tags: [authors]
+      summary: List authors
+      description: The catalog is small, so this list is not paginated and takes no query parameters.
+      responses:
+        "200":
+          description: Every author.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorList"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/authors/{authorId}:
+    parameters:
+      - $ref: "#/components/parameters/AuthorId"
+    get:
+      operationId: getAuthor
+      tags: [authors]
+      summary: Read one author
+      responses:
+        "200":
+          description: The author. Author 7 is Jane Austen.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Author"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/authors/{authorId}/books:
+    parameters:
+      - $ref: "#/components/parameters/AuthorId"
+    get:
+      operationId: listAuthorBooks
+      tags: [authors]
+      summary: List one author's books
+      description: Same list query as /v1/books, except author is not accepted. The path already chose the author.
+      parameters:
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: A page of that author's books.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/feed/books:
+    get:
+      operationId: listBookFeed
+      tags: [feed]
+      summary: Read the book feed
+      description: |
+        Always in id order. The server reads limit + 1 rows. next_cursor is
+        null on the last page. The cursor is opaque. A cursor that does not
+        decode is 400. With 50 books, limit=20 takes three calls.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of the feed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookFeed"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v2/books:
+    get:
+      operationId: listBooksV2
+      tags: [books-v2]
+      summary: List books, version 2
+      description: Same rules as v1. Each book adds links.self. v1 responses do not grow that field.
+      parameters:
+        - $ref: "#/components/parameters/Author"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: One page of version 2 books.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookPageV2"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v2/books/{bookId}:
+    parameters:
+      - $ref: "#/components/parameters/BookId"
+    get:
+      operationId: getBookV2
+      tags: [books-v2]
+      summary: Read one version 2 book
+      responses:
+        "200":
+          description: The book, plus links.self.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookV2"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/books/{bookId}/reviews:
+    parameters:
+      - $ref: "#/components/parameters/BookId"
+    get:
+      operationId: listReviews
+      tags: [reviews]
+      summary: List reviews for a book
+      description: |
+        Cursor page, same limit rules as the book feed. Default limit 10,
+        maximum 50. A cursor that does not decode is 400, before the book
+        lookup. An unknown book is 404. This route is not mounted yet.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of reviews. next_cursor is null on the last page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFeed"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Review a book
+      description: |
+        Check the body first, then the book, then the duplicate. The same
+        reviewer again, ignoring case, is 409. rating outside 1 to 5, or a
+        missing reviewer, is 422. An unknown book is 404. This route is not
+        mounted yet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewIn"
+            examples:
+              ada:
+                value:
+                  reviewer: Ada Lovelace
+                  rating: 5
+                  comment: Still sharp.
+      responses:
+        "201":
+          description: The review was created.
+          headers:
+            Location:
+              description: Path of the new review, for example /v1/books/1/reviews/1.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: This reviewer already reviewed this book.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/Invalid"
+components:
+  parameters:
+    BookId:
+      name: bookId
+      in: path
+      required: true
+      description: Book id. A non-integer is 422 with pointer /id.
+      schema:
+        type: integer
+    AuthorId:
+      name: authorId
+      in: path
+      required: true
+      description: Author id. A non-integer is 422 with pointer /id.
+      schema:
+        type: integer
+    Author:
+      name: author
+      in: query
+      required: false
+      description: Exact author name, case-insensitive. A name that matches nothing is an empty page, not 404.
+      schema:
+        type: string
+        maxLength: 100
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: One of id, -id, title, -title, year, -year. The default is id. A minus sign sorts descending.
+      schema:
+        type: string
+        enum: [id, "-id", title, "-title", year, "-year"]
+        default: id
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size for offset paging and for the feed. Default 10. Maximum 50.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: How many rows to skip. Default 0. Do not send this with page or per_page.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Page number, starting at 1. Do not send this with limit or offset.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      description: Page size for page-number paging. Default 10. Maximum 50.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from the previous page. A value that does not decode is 400.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: The JSON did not parse, or the cursor did not decode.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The book or author does not exist. The body has no errors array.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Invalid:
+      description: The JSON parsed, but a field or a query parameter breaks a rule.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Book:
+      type: object
+      required: [id, title, author, year]
+      properties:
+        id:
+          type: integer
+          description: Assigned by the server. Clients do not send it.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        author:
+          type: string
+          minLength: 1
+          maxLength: 100
+        year:
+          type: integer
+          minimum: 1450
+          maximum: 2100
+    BookIn:
+      type: object
+      additionalProperties: false
+      required: [title, author, year]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        author:
+          type: string
+          minLength: 1
+          maxLength: 100
+        year:
+          type: integer
+          minimum: 1450
+          maximum: 2100
+    BookPatch:
+      type: object
+      additionalProperties: false
+      description: Every field is optional. Null is rejected. Unknown fields are 422.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        author:
+          type: string
+          minLength: 1
+          maxLength: 100
+        year:
+          type: integer
+          minimum: 1450
+          maximum: 2100
+    BookV2:
+      allOf:
+        - $ref: "#/components/schemas/Book"
+        - type: object
+          required: [links]
+          properties:
+            links:
+              type: object
+              required: [self]
+              properties:
+                self:
+                  type: string
+                  description: Path of this book, for example /v2/books/1.
+                  examples: ["/v2/books/1"]
+    PageMeta:
+      type: object
+      required: [total, limit, offset]
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        page:
+          type: integer
+          description: Present when the client used page and per_page.
+        total_pages:
+          type: integer
+          description: Present when the client used page and per_page.
+    BookPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Book"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    BookPageV2:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookV2"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    BookFeed:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Book"
+        next_cursor:
+          type: [string, "null"]
+          description: Null on the last page. Clients treat a string cursor as opaque.
+    Author:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    AuthorList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Author"
+    Review:
+      type: object
+      required: [id, book_id, reviewer, rating, comment]
+      properties:
+        id:
+          type: integer
+        book_id:
+          type: integer
+        reviewer:
+          type: string
+          minLength: 1
+          maxLength: 100
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, "null"]
+          maxLength: 500
+    ReviewIn:
+      type: object
+      additionalProperties: false
+      required: [reviewer, rating]
+      properties:
+        reviewer:
+          type: string
+          minLength: 1
+          maxLength: 100
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 500
+    ReviewFeed:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Review"
+        next_cursor:
+          type: [string, "null"]
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      description: RFC 9457 problem details. Field errors add an errors array. A 404 body has no errors array.
+      properties:
+        type:
+          type: string
+          examples: ["about:blank"]
+        title:
+          type: string
+          examples: ["Unprocessable Content"]
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+    FieldError:
+      type: object
+      required: [pointer, detail]
+      properties:
+        pointer:
+          type: string
+          description: JSON pointer to the bad field, for example /title.
+          examples: ["/title"]
+        detail:
+          type: string
+          examples: ["Field required"]

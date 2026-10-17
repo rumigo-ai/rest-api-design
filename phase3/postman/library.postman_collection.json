@@ -1,0 +1,596 @@
+{
+  "info": {
+    "name": "Library API",
+    "description": "Phase 3 examples for the Library API. baseUrl defaults to FastAPI on port 8000. Point it at port 8001 to run the same tests against Express. Run the Data folder only with postman/books.csv.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "bookId", "value": "" },
+    { "key": "feedCursor", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "Read Dune",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const book = pm.response.json();",
+                  "pm.test('book 1 is Dune', () => {",
+                  "  pm.expect(book.id).to.eql(1);",
+                  "  pm.expect(book.title).to.eql('Dune');",
+                  "  pm.expect(book.author).to.eql('Frank Herbert');",
+                  "  pm.expect(book.year).to.eql(1965);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/1"
+          }
+        },
+        {
+          "name": "Create a book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const book = pm.response.json();",
+                  "pm.test('Location matches the new id', () => {",
+                  "  pm.expect(pm.response.headers.get('Location')).to.eql('/v1/books/' + book.id);",
+                  "});",
+                  "pm.test('server assigned the id', () => {",
+                  "  pm.expect(book).to.include.keys('id', 'title', 'author', 'year');",
+                  "  pm.expect(book.title).to.eql('Dune');",
+                  "  pm.expect(book.year).to.eql(1965);",
+                  "});",
+                  "pm.collectionVariables.set('bookId', String(book.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dune\",\n  \"author\": \"Frank Herbert\",\n  \"year\": 1965\n}"
+            },
+            "url": "{{baseUrl}}/v1/books"
+          }
+        },
+        {
+          "name": "Read that book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('same book', () => {",
+                  "  pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('bookId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/{{bookId}}"
+          }
+        },
+        {
+          "name": "Change the year",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const book = pm.response.json();",
+                  "pm.test('only the year changed', () => {",
+                  "  pm.expect(book.year).to.eql(1966);",
+                  "  pm.expect(book.title).to.eql('Dune');",
+                  "  pm.expect(book.author).to.eql('Frank Herbert');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 1966\n}"
+            },
+            "url": "{{baseUrl}}/v1/books/{{bookId}}"
+          }
+        },
+        {
+          "name": "Delete that book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.test('empty body', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/{{bookId}}"
+          }
+        },
+        {
+          "name": "Read the deleted book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('problem+json', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql(404);",
+                  "  pm.expect(body.title).to.eql('Not Found');",
+                  "  pm.expect(body).to.not.have.property('errors');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/{{bookId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Errors",
+      "item": [
+        {
+          "name": "Missing book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "const body = pm.response.json();",
+                  "pm.test('problem without field errors', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(body.title).to.eql('Not Found');",
+                  "  pm.expect(body.detail).to.eql('Book 9999 not found.');",
+                  "  pm.expect(body).to.not.have.property('errors');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/9999"
+          }
+        },
+        {
+          "name": "Empty title",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('pointer /title', () => {",
+                  "  pm.expect(body.title).to.eql('Unprocessable Content');",
+                  "  pm.expect(body.errors.some((item) => item.pointer === '/title')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"author\": \"Frank Herbert\",\n  \"year\": 1965\n}"
+            },
+            "url": "{{baseUrl}}/v1/books"
+          }
+        },
+        {
+          "name": "Unknown field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('pointer /isbn', () => {",
+                  "  pm.expect(body.errors.some((item) => item.pointer === '/isbn')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dune\",\n  \"author\": \"Frank Herbert\",\n  \"year\": 1965,\n  \"isbn\": \"x\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/books"
+          }
+        },
+        {
+          "name": "Broken JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('problem+json', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  pm.expect(pm.response.json().title).to.eql('Bad Request');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{"
+            },
+            "url": "{{baseUrl}}/v1/books"
+          }
+        },
+        {
+          "name": "Bad id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('pointer /id', () => {",
+                  "  pm.expect(body.errors.some((item) => item.pointer === '/id')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books/abc"
+          }
+        },
+        {
+          "name": "Method not allowed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('405', () => pm.response.to.have.status(405));",
+                  "pm.test('Allow lists the real methods', () => {",
+                  "  pm.expect(pm.response.headers.get('Allow')).to.eql('GET, PUT, PATCH, DELETE');",
+                  "});",
+                  "pm.test('problem+json', () => {",
+                  "  pm.expect(pm.response.json().title).to.eql('Method Not Allowed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/v1/books/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pagination",
+      "item": [
+        {
+          "name": "Offset page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('five books from the seed', () => {",
+                  "  pm.expect(body.data).to.have.lengthOf(5);",
+                  "  pm.expect(body.meta.total).to.eql(50);",
+                  "  pm.expect(body.meta.limit).to.eql(5);",
+                  "  pm.expect(body.meta.offset).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books?limit=5&offset=10"
+          }
+        },
+        {
+          "name": "Page number",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const meta = pm.response.json().meta;",
+                  "pm.test('page metadata', () => {",
+                  "  pm.expect(meta.page).to.eql(3);",
+                  "  pm.expect(meta.total_pages).to.eql(5);",
+                  "  pm.expect(meta.total).to.eql(50);",
+                  "  pm.expect(meta.limit).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books?page=3&per_page=10"
+          }
+        },
+        {
+          "name": "Mixed paging styles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('problem+json', () => {",
+                  "  pm.expect(pm.response.json().title).to.eql('Unprocessable Content');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books?limit=5&page=1"
+          }
+        },
+        {
+          "name": "Limit above 50",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('pointer /limit', () => {",
+                  "  pm.expect(body.errors.some((item) => item.pointer === '/limit')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/books?limit=51"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feed",
+      "item": [
+        {
+          "name": "First feed page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('twenty books and a cursor', () => {",
+                  "  pm.expect(body.data).to.have.lengthOf(20);",
+                  "  pm.expect(body.next_cursor).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('feedCursor', body.next_cursor);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/feed/books?limit=20"
+          }
+        },
+        {
+          "name": "Second feed page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('the next twenty', () => {",
+                  "  pm.expect(body.data).to.have.lengthOf(20);",
+                  "  pm.expect(body.data[0].id).to.eql(21);",
+                  "  pm.expect(body.next_cursor).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('feedCursor', body.next_cursor);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/feed/books?limit=20&cursor={{feedCursor}}"
+          }
+        },
+        {
+          "name": "Last feed page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('the last ten, and no further cursor', () => {",
+                  "  pm.expect(body.data).to.have.lengthOf(10);",
+                  "  pm.expect(body.data[0].id).to.eql(41);",
+                  "  pm.expect(body.next_cursor).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/feed/books?limit=20&cursor={{feedCursor}}"
+          }
+        },
+        {
+          "name": "Bad cursor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('cursor rejected', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.title).to.eql('Bad Request');",
+                  "  pm.expect(body.detail).to.eql('The cursor is not valid.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/feed/books?cursor=not-a-cursor"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data",
+      "description": "Run this folder with postman/books.csv. Newman: npm run newman:data. Do not include it in the main run. Each row creates a book and leaves it in the store.",
+      "item": [
+        {
+          "name": "Create a book from the row",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const book = pm.response.json();",
+                  "pm.test('row values came back', () => {",
+                  "  pm.expect(book.title).to.eql(pm.iterationData.get('title'));",
+                  "  pm.expect(book.author).to.eql(pm.iterationData.get('author'));",
+                  "  pm.expect(book.year).to.eql(Number(pm.iterationData.get('year')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{title}}\",\n  \"author\": \"{{author}}\",\n  \"year\": {{year}}\n}"
+            },
+            "url": "{{baseUrl}}/v1/books"
+          }
+        }
+      ]
+    }
+  ]
+}

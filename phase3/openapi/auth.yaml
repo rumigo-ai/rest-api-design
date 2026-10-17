@@ -1,0 +1,238 @@
+openapi: 3.1.0
+info:
+  title: Library API auth
+  version: 1.0.0
+  description: |
+    Security example for the Phase 2 JWT server on port 8020.
+    Login is public. Every other route needs a bearer token.
+    apiKeyAuth is the other scheme from the session slides. This server
+    checks the bearer token, not an API key. The API key server is port 8010.
+    Rate limiting is a different process on port 8030, so login here does not
+    answer 429.
+servers:
+  - url: http://127.0.0.1:8020
+    description: FastAPI JWT server
+security:
+  - bearerAuth: []
+paths:
+  /v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in and receive a token
+      description: |
+        A wrong username or password is 401. The token lasts 15 minutes.
+        Alice is a member (id 7, password alice-pass). Bob is a member
+        (id 8, password bob-pass). Admin is an admin (id 1, password admin-pass).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginIn"
+            examples:
+              alice:
+                value:
+                  username: alice
+                  password: alice-pass
+      responses:
+        "200":
+          description: A bearer token for the next requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Who the token says you are
+      description: Missing, invalid, or expired token is 401. The body is id and role.
+      responses:
+        "200":
+          description: The caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              examples:
+                alice:
+                  value:
+                    id: 7
+                    role: member
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [auth]
+      summary: Admin-only stats
+      description: |
+        A valid token is not enough. A member receives 403. An admin receives
+        the stats. This is authorization, which is a different question from
+        authentication.
+      responses:
+        "200":
+          description: Counts the admin is allowed to see.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+              examples:
+                seed:
+                  value:
+                    books: 50
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The token is valid, and the role is not admin.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/loans/{loanId}:
+    parameters:
+      - $ref: "#/components/parameters/LoanId"
+    get:
+      operationId: getLoan
+      tags: [auth]
+      summary: Read a loan you own
+      description: |
+        Loan 12 belongs to Bob (user id 8) and book 1. Alice has a valid
+        token and still receives 404, because the loan is not hers. A missing
+        loan is the same 404. The response does not say whether the loan
+        exists.
+      responses:
+        "200":
+          description: The loan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+              examples:
+                bob:
+                  value:
+                    id: 12
+                    user_id: 8
+                    book_id: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The loan does not exist, or it belongs to someone else.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+components:
+  parameters:
+    LoanId:
+      name: loanId
+      in: path
+      required: true
+      schema:
+        type: integer
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Send Authorization Bearer and the access_token from login.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        The API key scheme from the slides. The server on port 8010 reads
+        X-API-Key. This JWT document names the scheme so the Authorize button
+        can show both styles. Calls to port 8020 still require the bearer token.
+  responses:
+    Unauthorized:
+      description: The caller did not prove who they are.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Invalid:
+      description: The JSON parsed, but a field breaks a rule.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    LoginIn:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+    Token:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          examples: ["Bearer"]
+        expires_in:
+          type: integer
+          description: Seconds until the token expires. The demo uses 900.
+          examples: [900]
+    User:
+      type: object
+      required: [id, role]
+      properties:
+        id:
+          type: integer
+        role:
+          type: string
+          enum: [member, admin]
+    Stats:
+      type: object
+      required: [books]
+      properties:
+        books:
+          type: integer
+    Loan:
+      type: object
+      required: [id, user_id, book_id]
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        book_id:
+          type: integer
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          examples: ["about:blank"]
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [pointer, detail]
+            properties:
+              pointer:
+                type: string
+              detail:
+                type: string

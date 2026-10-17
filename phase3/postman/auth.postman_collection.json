@@ -1,0 +1,358 @@
+{
+  "info": {
+    "name": "Library Auth",
+    "description": "Phase 3 auth examples. The Session folder calls the JWT server on port 8020. The Rate limit folder calls port 8030 and is a manual run: restart that server first, then run the folder once.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8020" },
+    { "key": "rateLimitUrl", "value": "http://127.0.0.1:8030" },
+    { "key": "aliceToken", "value": "" },
+    { "key": "bobToken", "value": "" },
+    { "key": "adminToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "Login as Alice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('token issued', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.token_type).to.eql('Bearer');",
+                  "  pm.expect(body.expires_in).to.eql(900);",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('aliceToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"alice-pass\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Who am I",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('alice', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const user = pm.response.json();",
+                  "  pm.expect(user.id).to.eql(7);",
+                  "  pm.expect(user.role).to.eql('member');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{aliceToken}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/v1/me"
+          }
+        },
+        {
+          "name": "Who am I, no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('problem+json', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql(401);",
+                  "  pm.expect(body.title).to.eql('Unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/v1/me"
+          }
+        },
+        {
+          "name": "Admin stats as Alice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('forbidden', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.title).to.eql('Forbidden');",
+                  "  pm.expect(body.detail).to.eql('You are not allowed to do that.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{aliceToken}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/v1/admin/stats"
+          }
+        },
+        {
+          "name": "Login as admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin-pass\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Admin stats as admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('book count', () => pm.expect(pm.response.json().books).to.eql(50));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{adminToken}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/v1/admin/stats"
+          }
+        },
+        {
+          "name": "Bob's loan as Alice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('does not reveal the loan', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Loan 12 not found.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{aliceToken}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/v1/loans/12"
+          }
+        },
+        {
+          "name": "Login as Bob",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('bobToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"bob\",\n  \"password\": \"bob-pass\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Bob's loan as Bob",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const loan = pm.response.json();",
+                  "pm.test('loan 12', () => {",
+                  "  pm.expect(loan.id).to.eql(12);",
+                  "  pm.expect(loan.user_id).to.eql(8);",
+                  "  pm.expect(loan.book_id).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{bobToken}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/v1/loans/12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rate limit",
+      "description": "Restart the rate-limit server, then run this folder once in the same minute. Attempts 1 to 5 are 401. Attempt 6 is 429. A second run in the same window fails because the counter has not reset.",
+      "item": [
+        {
+          "name": "Wrong login 1",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Wrong login 2",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Wrong login 3",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Wrong login 4",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Wrong login 5",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        },
+        {
+          "name": "Wrong login 6",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('429', () => pm.response.to.have.status(429));",
+                  "pm.test('Retry-After', () => {",
+                  "  pm.expect(pm.response.headers.get('Retry-After')).to.be.a('string').and.not.empty;",
+                  "  pm.expect(pm.response.json().title).to.eql('Too Many Requests');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"nope\"\n}" },
+            "url": "{{rateLimitUrl}}/v1/auth/login"
+          }
+        }
+      ]
+    }
+  ]
+}

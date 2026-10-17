@@ -56,6 +56,14 @@ button, input, select, textarea {
   font-size: 0.85rem;
 }
 
+.catalog-link {
+  display: inline-block;
+  margin-top: 0.55rem;
+  color: #fdba74;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .server-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
